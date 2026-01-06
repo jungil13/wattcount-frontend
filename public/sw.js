@@ -19,11 +19,30 @@ self.addEventListener('install', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // Skip caching for API calls - always fetch from network
+  if (url.pathname.startsWith('/api/') || url.pathname.includes('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // Skip caching for external requests (like localhost in production)
+  if (url.origin !== self.location.origin && !url.origin.includes('vercel.app')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // For other requests, use cache-first strategy
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         // Return cached version or fetch from network
         return response || fetch(event.request);
+      })
+      .catch(() => {
+        // If fetch fails, return a basic response to prevent errors
+        return new Response('Network error', { status: 408 });
       })
   );
 });
