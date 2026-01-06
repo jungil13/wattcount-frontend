@@ -1,20 +1,33 @@
 // Use environment variable if set, otherwise use relative path for production
 // or localhost for development
+// This function runs at runtime to properly detect the environment
 const getApiBaseUrl = () => {
+  // Check environment variable first (highest priority)
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
   
-  // In production (Vercel), use relative path since backend is on same domain
-  if (import.meta.env.PROD || window.location.hostname.includes('vercel.app')) {
+  // Runtime check: if we're on Vercel or any production domain, use relative path
+  // This ensures it works even if the build was done in dev mode
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isProduction = hostname.includes('vercel.app') || 
+                       hostname.includes('.netlify.app') || 
+                       hostname.includes('.github.io') ||
+                       (!hostname.includes('localhost') && !hostname.includes('127.0.0.1'));
+  
+  if (isProduction) {
+    console.log('[API] Using relative path /api for production');
     return '/api';
   }
   
-  // Development fallback
+  // Development: use localhost
+  console.log('[API] Using localhost:3000/api for development');
   return 'http://localhost:3000/api';
 };
 
+// Get API base URL at runtime
 const API_BASE_URL = getApiBaseUrl();
+console.log('[API] Base URL:', API_BASE_URL);
 
 // Helper function to get auth token
 const getToken = () => {
@@ -39,7 +52,20 @@ const getHeaders = (includeAuth = true) => {
 
 // Generic fetch wrapper
 const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Recalculate API base URL at runtime to ensure it's correct
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
+  
+  // Safety check: prevent localhost in production
+  if (typeof window !== 'undefined') {
+    const isProduction = window.location.hostname.includes('vercel.app') || 
+                         window.location.hostname.includes('.netlify.app');
+    if (isProduction && url.includes('localhost')) {
+      console.error('[API] ERROR: Attempted to use localhost in production!', url);
+      throw new Error('Cannot use localhost API in production. Please set VITE_API_URL environment variable.');
+    }
+  }
+  
   const config = {
     ...options,
     headers: {
