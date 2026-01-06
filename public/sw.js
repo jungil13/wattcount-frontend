@@ -1,87 +1,53 @@
 const CACHE_NAME = 'wattcount-v1';
-const urlsToCache = [
+const STATIC_CACHE = [
   '/',
-  '/index.html',
-  '/src/main.js',
-  '/src/assets/main.css'
+  '/index.html'
 ];
 
-// Install event - cache resources
+// Install
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_CACHE))
   );
+  self.skipWaiting();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  
-  // BLOCK localhost requests in production - this prevents CORS errors
-  const isProduction = self.location.hostname.includes('vercel.app') || 
-                       self.location.hostname.includes('.netlify.app') ||
-                       (!self.location.hostname.includes('localhost') && !self.location.hostname.includes('127.0.0.1'));
-  
-  if (isProduction && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
-    console.warn('[SW] Blocked localhost request in production:', url.href);
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // 🚫 NEVER touch API requests
+  if (url.pathname.startsWith('/auth') ||
+      url.pathname.startsWith('/users') ||
+      url.pathname.startsWith('/bills') ||
+      url.pathname.startsWith('/payments')) {
+    return;
+  }
+
+  // 🚫 NEVER intercept JS / CSS / fonts
+  if (
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    request.destination === 'font'
+  ) {
+    return;
+  }
+
+  // Cache-first for navigation only
+  if (request.mode === 'navigate') {
     event.respondWith(
-      Promise.reject(new Error('Localhost requests are not allowed in production'))
+      caches.match('/index.html').then((cached) => cached || fetch(request))
     );
-    return;
   }
-  
-  // Skip caching for API calls - always fetch from network
-  if (url.pathname.startsWith('/api/') || url.pathname.includes('/api/')) {
-    event.respondWith(fetch(event.request).catch(err => {
-      console.error('[SW] API fetch failed:', err);
-      throw err;
-    }));
-    return;
-  }
-  
-  // Skip caching for external requests that aren't from the same origin
-  if (url.origin !== self.location.origin) {
-    // In production, block external requests except to same domain
-    if (isProduction && !url.origin.includes(self.location.hostname.split('.').slice(-2).join('.'))) {
-      console.warn('[SW] Blocked external request in production:', url.href);
-      event.respondWith(Promise.reject(new Error('External requests blocked in production')));
-      return;
-    }
-    event.respondWith(fetch(event.request));
-    return;
-  }
-  
-  // For other requests, use cache-first strategy
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
-      .catch((err) => {
-        console.error('[SW] Cache fetch failed:', err);
-        // If fetch fails, return a basic response to prevent errors
-        return new Response('Network error', { status: 408 });
-      })
-  );
 });
 
-// Activate event - clean up old caches
+// Activate
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((k) => k !== CACHE_NAME && caches.delete(k)))
+    )
   );
+  self.clients.claim();
 });
