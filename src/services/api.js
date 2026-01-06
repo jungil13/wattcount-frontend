@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 // Helper function to get auth token
 const getToken = () => {
@@ -23,7 +23,7 @@ const getHeaders = (includeAuth = true) => {
 
 // Generic fetch wrapper
 const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${API_BASE_URL}/api${endpoint}`;
   const config = {
     ...options,
     headers: {
@@ -32,18 +32,14 @@ const apiRequest = async (endpoint, options = {}) => {
     },
   };
 
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json();
+  const response = await fetch(url, config);
+  const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || 'An error occurred');
-    }
-
-    return data;
-  } catch (error) {
-    throw error;
+  if (!response.ok) {
+    throw new Error(data.error || 'An error occurred');
   }
+
+  return data;
 };
 
 // Auth API
