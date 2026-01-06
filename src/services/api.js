@@ -1,4 +1,20 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Use environment variable if set, otherwise use relative path for production
+// or localhost for development
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // In production (Vercel), use relative path since backend is on same domain
+  if (import.meta.env.PROD || window.location.hostname.includes('vercel.app')) {
+    return '/api';
+  }
+  
+  // Development fallback
+  return 'http://localhost:3000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Helper function to get auth token
 const getToken = () => {
@@ -23,7 +39,7 @@ const getHeaders = (includeAuth = true) => {
 
 // Generic fetch wrapper
 const apiRequest = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}/api${endpoint}`;
+  const url = `${API_BASE_URL}${endpoint}`;
   const config = {
     ...options,
     headers: {
@@ -32,14 +48,18 @@ const apiRequest = async (endpoint, options = {}) => {
     },
   };
 
-  const response = await fetch(url, config);
-  const data = await response.json();
+  try {
+    const response = await fetch(url, config);
+    const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.error || 'An error occurred');
+    if (!response.ok) {
+      throw new Error(data.error || 'An error occurred');
+    }
+
+    return data;
+  } catch (error) {
+    throw error;
   }
-
-  return data;
 };
 
 // Auth API
