@@ -50,15 +50,40 @@ const apiRequest = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json();
+    
+    // Check if response has content before trying to parse JSON
+    const contentType = response.headers.get('content-type');
+    const text = await response.text();
+    
+    // If response is empty, throw a meaningful error
+    if (!text || text.trim() === '') {
+      throw new Error(`Empty response from server (${response.status} ${response.statusText})`);
+    }
+    
+    // Try to parse as JSON if content-type indicates JSON, or if text looks like JSON
+    let data;
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      }
+    } else {
+      // If not JSON, create an error object from the text
+      throw new Error(text || `Server error: ${response.status} ${response.statusText}`);
+    }
 
     if (!response.ok) {
-      throw new Error(data.error || 'An error occurred');
+      throw new Error(data.error || data.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
     return data;
   } catch (error) {
-    throw error;
+    // Re-throw with more context
+    if (error.message) {
+      throw error;
+    }
+    throw new Error(`Network error: ${error.message || 'Unknown error'}`);
   }
 };
 
@@ -183,4 +208,3 @@ export const devAPI = {
     includeAuth: false,
   }),
 };
-
